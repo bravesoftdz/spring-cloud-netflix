@@ -18,6 +18,7 @@
 package org.springframework.cloud.netflix.zuul;
 
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -27,7 +28,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.web.ServerProperties;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
-import org.springframework.boot.web.servlet.ServletRegistrationBean;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.boot.web.servlet.error.ErrorController;
 import org.springframework.cloud.client.actuator.HasFeatures;
 import org.springframework.cloud.client.discovery.event.HeartbeatEvent;
@@ -58,11 +59,11 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 import org.springframework.context.event.ContextRefreshedEvent;
+import org.springframework.core.Ordered;
 
 import com.netflix.zuul.FilterLoader;
 import com.netflix.zuul.ZuulFilter;
 import com.netflix.zuul.filters.FilterRegistry;
-import com.netflix.zuul.http.ZuulServlet;
 import com.netflix.zuul.monitoring.CounterFactory;
 import com.netflix.zuul.monitoring.TracerFactory;
 
@@ -75,7 +76,7 @@ import io.micrometer.core.instrument.MeterRegistry;
  */
 @Configuration
 @EnableConfigurationProperties({ ZuulProperties.class })
-@ConditionalOnClass(ZuulServlet.class)
+@ConditionalOnClass(ZuulServletFilter.class)
 @ConditionalOnBean(ZuulServerMarkerConfiguration.Marker.class)
 // Make sure to get the ServerProperties from the same place as a normal web app would
 // FIXME @Import(ServerPropertiesAutoConfiguration.class)
@@ -127,14 +128,16 @@ public class ZuulServerAutoConfiguration {
 	}
 
 	@Bean
-	@ConditionalOnMissingBean(name = "zuulServlet")
-	public ServletRegistrationBean zuulServlet() {
-		ServletRegistrationBean<ZuulServlet> servlet = new ServletRegistrationBean<>(new ZuulServlet(),
-				this.zuulProperties.getServletPattern());
+	@ConditionalOnMissingBean(name = "zuulServletFilter")
+	public FilterRegistrationBean zuulServletFilter(){
+		final FilterRegistrationBean<ZuulServletFilter> filterRegistration = new FilterRegistrationBean<>();
+		filterRegistration.setUrlPatterns(Collections.singleton(this.zuulProperties.getServletPattern()));
+		filterRegistration.setFilter(new ZuulServletFilter());
+		filterRegistration.setOrder(Ordered.LOWEST_PRECEDENCE);
 		// The whole point of exposing this servlet is to provide a route that doesn't
 		// buffer requests.
-		servlet.addInitParameter("buffer-requests", "false");
-		return servlet;
+		filterRegistration.addInitParameter("buffer-requests", "false");
+		return filterRegistration;
 	}
 
 	// pre filters
